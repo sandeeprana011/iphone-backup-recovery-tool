@@ -10,6 +10,10 @@ import Foundation
 import FileProvider
 
 class ViewController: NSViewController {
+    
+    
+    @IBOutlet weak var lStatus:NSTextField!
+    
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -50,6 +54,31 @@ class ViewController: NSViewController {
         }
     }
     
+    @IBAction func onClickBackupPathForWhatsapp(_ sender: NSButton) {
+        let dialog = NSOpenPanel();
+
+        dialog.title                   = "Choose a file| Our Code World";
+        dialog.showsResizeIndicator    = true;
+        dialog.showsHiddenFiles        = false;
+        dialog.allowsMultipleSelection = false;
+        dialog.canChooseDirectories = true;
+        dialog.canChooseFiles = false;
+
+        if (dialog.runModal() ==  NSApplication.ModalResponse.OK) {
+            let result = dialog.url // Pathname of the file
+
+            if (result != nil) {
+                let path: String = result!.path
+                self.pathSelected = result?.path
+                self.iterateThroughFilesAndFolderAtForWhatsapp(path:path);
+            }
+            
+        } else {
+            // User clicked on "Cancel"
+            return
+        }
+    }
+    
     
     func iterateThroughFilesAndFolderAt(path:String)  {
         do {
@@ -68,16 +97,64 @@ class ViewController: NSViewController {
                 }
             }
             
+            self.lStatus.stringValue = "Done"
             
         }catch let error {
             print(error.localizedDescription)
+        }
+        print("Process Completed!")
+    }
+    
+    func iterateThroughFilesAndFolderAtForWhatsapp(path:String)  {
+        do {
+            let allPaths = try FileManager.default.contentsOfDirectory(atPath: path)
+            var isDir:ObjCBool = false
+            for item in allPaths {
+                let fullPath = "\(path)/\(item)"
+                if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir) {
+                    if isDir.boolValue {
+                        iterateThroughFilesAndFolderAtForWhatsapp(path: fullPath)
+                    }else {
+                        self.checkExtensionType(filePath:fullPath, currentName:item)
+                    }
+                }else {
+                    print("File Doesn't exist: \(fullPath)");
+                }
+            }
+            
+            self.lStatus.stringValue = "Done"
+            
+        }catch let error {
+            print(error.localizedDescription)
+        }
+        print("Process Completed!")
+    }
+    
+    
+    func checkExtensionType(filePath:String, currentName:String){
+        let split = currentName.split(separator: ".");
+        if split.count > 1 {
+            let extFile = String(describing:split.last)
+            if let path = self.pathSelected {
+                do {
+                    let dirPath = "\(path)/Recovery/\(extFile)/"
+                    
+                    try FileManager.default.createDirectory(at: URL(fileURLWithPath: dirPath), withIntermediateDirectories: true, attributes: [:]);
+                    
+                    let urlTo = URL(fileURLWithPath: "\(dirPath)/\(currentName)")
+                    try FileManager.default.copyItem(at: URL(fileURLWithPath: filePath), to:urlTo)
+                    self.lStatus.stringValue = "Updating File: \(currentName)"
+                }catch let error {
+                    print(error.localizedDescription)
+                }
+            }
         }
     }
     
     
     func checkIfFileIsMedia(filePath:String, currentName:String) {
+        let handle = FileHandle(forReadingAtPath: filePath)
         do {
-            let handle = FileHandle(forReadingAtPath: filePath)
             let dataFirstByte = try handle?.read(upToCount: 1)
             let mime = dataFirstByte?.mime
             
@@ -88,15 +165,18 @@ class ViewController: NSViewController {
                 try FileManager.default.createDirectory(at: URL(fileURLWithPath: dirPath), withIntermediateDirectories: true, attributes: [:]);
                 
                 try FileManager.default.copyItem(at: URL(fileURLWithPath: filePath), to:urlTo)
+                self.lStatus.stringValue = "Updating File: \(currentName)"
             }else {
                 print("Error: Couldn't copy file \(filePath)")
+                self.lStatus.stringValue = "Error File: \(currentName)"
             }
-            
 //            print("\(currentName):",dataFirstByte?.mime?.mimeString, dataFirstByte?.hexString)
             try handle?.close();
         }catch let error {
             print(error)
+            try? handle?.close();
         }
+        
         
     }
 
@@ -110,7 +190,7 @@ struct MimeType {
 }
 
 enum FileType:String {
-    case image,video,archive,audio,unknown,document,application
+    case image,video,archive,audio,unknown,document,application,database,tcpdump
 }
 
 extension Data {
@@ -131,6 +211,10 @@ extension Data {
         0x75: MimeType(hex: 0x75, mimeString: "application/zip", mimeExtension: "zip", type: .document),
         0x60: MimeType(hex: 0x60, mimeString: "application/arj", mimeExtension: "arj", type: .document),
         0x3C: MimeType(hex: 0x3C, mimeString: "application/xml", mimeExtension: "xml", type: .document),
+        0x62: MimeType(hex: 0x62, mimeString: "application/plist", mimeExtension: "xml", type: .document),
+        0x53: MimeType(hex: 0x53, mimeString: "application/sqlite", mimeExtension: "db", type: .database),
+        0x7B: MimeType(hex: 0x7B, mimeString: "application/rtf", mimeExtension: "rtf", type: .document),
+        0x34: MimeType(hex: 0x34, mimeString: "application/pcap", mimeExtension: "pcap", type: .tcpdump),
     ]
     
     var mimeString: String {
